@@ -2,6 +2,7 @@
 import logging
 import os
 import time
+from logging.handlers import RotatingFileHandler
 from urllib.error import HTTPError
 
 import requests
@@ -11,13 +12,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logging.basicConfig(
-    filename='main.log',
-    filemode='w',
+    handlers=[logging.FileHandler(
+        filename="main.log",
+        encoding='utf-8', mode='w')],
     format='%(asctime)s, %(levelname)s, %(message)s',
-    level=logging.DEBUG
+    level=logging.DEBUG,
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = RotatingFileHandler(
+    'Bot.log',
+    maxBytes=50000000,
+    backupCount=5,
+    encoding='utf-8',
+)
+formatter = logging.Formatter('%(asctime)s, %(levelname)s, %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -35,7 +47,7 @@ HOMEWORK_VERDICTS = {
 }
 
 
-def check_tokens():
+def check_tokens() -> None:
     """Проверка на существование обязательных переменых."""
     if PRACTICUM_TOKEN is None:
         logger.critical('Нет PRACTICUM_TOKEN.')
@@ -48,17 +60,17 @@ def check_tokens():
         raise SystemExit()
 
 
-def send_message(bot, message):
+def send_message(bot: telegram.bot.Bot, message: str) -> None:
     """Функция отправки сообщения боту ."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except Exception as error:
         logger.error(f'Ошибка при отправке: {error}.')
     else:
-        logger.debug('Cообщение отправлено.')
+        logger.debug('Сообщение отправлено.')
 
 
-def get_api_answer(timestamp):
+def get_api_answer(timestamp: int) -> dict:
     """Функция запроса к API."""
     try:
         homeworks = requests.get(
@@ -74,7 +86,7 @@ def get_api_answer(timestamp):
     return homeworks.json()
 
 
-def check_response(response):
+def check_response(response: dict) -> dict:
     """Функция проверки ответа API."""
     if type(response) != dict:
         logger.error('У response не тот тип.')
@@ -89,7 +101,7 @@ def check_response(response):
     return response.get('homeworks')
 
 
-def parse_status(homework):
+def parse_status(homework: dict) -> str:
     """Функция получения статуса домашней работы."""
     try:
         status = homework['status']
@@ -106,7 +118,7 @@ def parse_status(homework):
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
-def main():
+def main() -> None:
     """Основная логика работы бота."""
     check_tokens()
     try:
@@ -114,7 +126,7 @@ def main():
     except Exception as error:
         logger.error(f'Ошибка в запуске бота {error}')
     timestamp = int(time.time())
-    send_message(bot, 'Начата проверка!')
+    send_message(bot, 'Бот включен!')
     err = ''
     while True:
         try:
