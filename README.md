@@ -17,15 +17,16 @@
 ____
 
 <h2>Инструкция</h2>
+
 1. Cкопировать проект 
-'''
+```
     git.clone
-'''
+```
 2. Переименовать .env.exapmle в .env
 3. Заполнить файл .env
 4. Установить виртуальное окр и запустить его 
-'''
+```
 python -m venv venv
 source venv/Scripts/activate
 python -m pip intall --upgrade pip
-'''
+```
