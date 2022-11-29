@@ -1,7 +1,9 @@
 
+import json
 import logging
 import os
 import time
+from http import HTTPStatus
 from logging.handlers import RotatingFileHandler
 from urllib.error import HTTPError
 
@@ -49,14 +51,16 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens() -> None:
     """Проверка на существование обязательных переменых."""
+    exit = False
     if PRACTICUM_TOKEN is None:
         logger.critical('Нет PRACTICUM_TOKEN.')
-        raise SystemExit()
+        exit = True
     if TELEGRAM_TOKEN is None:
         logger.critical('Нет TELEGRAM_TOKEN.')
-        raise SystemExit()
+        exit = True
     if TELEGRAM_CHAT_ID is None:
         logger.critical('Нет TELEGRAM_CHAT_ID.')
+    if exit is True:
         raise SystemExit()
 
 
@@ -64,56 +68,64 @@ def send_message(bot: telegram.bot.Bot, message: str) -> None:
     """Функция отправки сообщения боту ."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
+        logger.debug('Сообщение отправлено.')
     except Exception as error:
         logger.error(f'Ошибка при отправке: {error}.')
-    else:
-        logger.debug('Сообщение отправлено.')
 
 
 def get_api_answer(timestamp: int) -> dict:
     """Функция запроса к API."""
     try:
-        homeworks = requests.get(
+        response = requests.get(
             ENDPOINT,
             headers=HEADERS,
             params={'from_date': timestamp}
         )
-    except Exception as error:
-        logger.error(f'Ошибка при запросе к основному API: {error}.')
-    if homeworks.status_code != 200:
-        logger.error(f'Ошибка статус ответа={homeworks.status_code}.')
-        raise HTTPError(f'статус ответа={homeworks.status_code}')
-    return homeworks.json()
+    except requests.exceptions.HTTPError as errh:
+        logger.error(f' Ошибка HTTP : {errh}.')
+    except requests.exceptions.ConnectionError as errc:
+        logger.error(f' Ошибка соединения : {errc}.')
+    except requests.exceptions.Timeout as errt:
+        logger.error(f' Превышено время : {errt}.')
+    except requests.exceptions.RequestException as error:
+        logger.error(f'Неизвестная Ошибка: {error}.')
+    if response.status_code != HTTPStatus.OK:
+        logger.error(f'Ошибка статус ответа={response.status_code}.')
+        raise HTTPError(f'статус ответа={response.status_code}')
+    try:
+        return response.json()
+    except json.decoder.JSONDecodeError:
+        logger.error('Ответ не преобразовался в json.')
 
 
 def check_response(response: dict) -> dict:
     """Функция проверки ответа API."""
-    if type(response) != dict:
+    if not isinstance(response, dict):
         logger.error('У response не тот тип.')
         raise TypeError
-    try:
-        homeworks = response['homeworks']
-    except KeyError:
+    homeworks = response.get('homeworks')
+    if homeworks is None:
         logger.error('У response нет ключа homeworks.')
-    if type(homeworks) != list:
+        raise KeyError
+    if not isinstance(homeworks, list):
         logger.error('У homeworks не тот тип.')
         raise TypeError
-    return response.get('homeworks')
+    return homeworks
 
 
 def parse_status(homework: dict) -> str:
     """Функция получения статуса домашней работы."""
-    try:
-        status = homework['status']
-    except KeyError:
+    status = homework.get('status')
+    if status is None:
         logger.error('У homework нет ключа status.')
+        raise KeyError
     if status not in HOMEWORK_VERDICTS.keys():
         logger.error('status нет в словаре.')
         raise ValueError
-    try:
-        homework_name = homework['homework_name']
-    except KeyError:
+    homework_name = homework.get('homework_name')
+    if homework_name is None:
         logger.error('У homework нет ключа homework_name.')
+        raise KeyError
     verdict = HOMEWORK_VERDICTS[status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -123,15 +135,15 @@ def main() -> None:
     check_tokens()
     try:
         bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    except Exception as error:
+    except telegram.error.TelegramError as error:
         logger.error(f'Ошибка в запуске бота {error}')
-    timestamp = int(time.time())
+        raise SystemExit()
+    timestamp = int(time.time() - RETRY_PERIOD)
     send_message(bot, 'Бот включен!')
-    err = ''
+    last_error = ''
     while True:
         try:
             response = get_api_answer(timestamp)
-            timestamp = response.get('current_date')
             homeworks = check_response(response)
             if len(homeworks) > 0:
                 homework = homeworks[0]
@@ -139,13 +151,17 @@ def main() -> None:
                 send_message(bot, message)
             else:
                 logger.debug('Нет обновлений.')
-            err = ''
+            last_error = ''
         except Exception as error:
+            error = str(error)
             message = f'Сбой в работе программы: {error}'
-            if str(error) != str(err):
+            if error != last_error:
                 send_message(bot, message)
-                err = error
-            logger.error(f'{message}')
+                last_error = error
+        timestamp = response.get('current_date')
+        if timestamp is None:
+            logger.error('У response нет ключа current_date.')
+            raise KeyError
         time.sleep(RETRY_PERIOD)
 
 
