@@ -60,6 +60,7 @@ def check_tokens() -> None:
         exit = True
     if TELEGRAM_CHAT_ID is None:
         logger.critical('Нет TELEGRAM_CHAT_ID.')
+        exit = True
     if exit:
         raise SystemExit()
 
