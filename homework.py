@@ -60,7 +60,7 @@ def check_tokens() -> None:
         exit = True
     if TELEGRAM_CHAT_ID is None:
         logger.critical('Нет TELEGRAM_CHAT_ID.')
-    if exit is True:
+    if exit:
         raise SystemExit()
 
 
@@ -152,16 +152,13 @@ def main() -> None:
             else:
                 logger.debug('Нет обновлений.')
             last_error = ''
+            timestamp = response.get('current_date', timestamp)
         except Exception as error:
             error = str(error)
             message = f'Сбой в работе программы: {error}'
             if error != last_error:
                 send_message(bot, message)
                 last_error = error
-        timestamp = response.get('current_date')
-        if timestamp is None:
-            logger.error('У response нет ключа current_date.')
-            raise KeyError
         time.sleep(RETRY_PERIOD)
 
 
