@@ -1,6 +1,4 @@
-# homework_bot
-<h1 align="center"> python telegram bot</h1>
-
+# python telegram bot
 ___
 <h2>Задача бота</h2>
 
